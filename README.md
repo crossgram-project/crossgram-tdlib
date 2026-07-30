@@ -1,9 +1,10 @@
 # Crossgram TDLib patcher
 
-`crossgram-tdlib` adds instance-scoped Crossgram server selection to upstream
-[TDLib](https://github.com/tdlib/td) without changing `td_api.tl` or regenerating
-client bindings. It is the shared native layer for Crossgram clients based on
-Unigram, Telegram X, Mithka, and other TDLib frontends.
+`crossgram-tdlib` adds instance-scoped Crossgram server selection and direct
+bridge-media downloads to upstream [TDLib](https://github.com/tdlib/td). The
+server option does not change `td_api.tl`, so existing client bindings keep
+working; the native patch extends the internal MTProto schema for direct media.
+It is the shared layer for Unigram, Telegram X, Mithka, and other TDLib clients.
 
 The patch introduces the standard TDLib option
 `x_crossgram_server_configuration`. Existing bindings already support
@@ -71,6 +72,29 @@ Raw tdjson request example:
 }
 ```
 
+## Direct bridge-media downloads
+
+When a custom Crossgram server returns a document or photo whose file reference
+is `bridge-media:<positive-id>`, TDLib resolves `crossgram.getFileUrl` on the
+same DC. A valid response contains an unexpired HTTP(S) URL and range support:
+
+```json
+{
+  "url": "https://cdn.example/media/signed-token",
+  "expiresAt": 1780000000000,
+  "supportsRange": true
+}
+```
+
+TDLib requests each file part with `Accept-Encoding: identity` and an exact
+HTTP `Range` header. It accepts only `206 Partial Content` with a matching
+`Content-Range`. RPC failure, malformed or expired metadata, timeout, HTTP
+failure, or invalid range data disables direct mode for that file download and
+retries the same part through the original `upload.getFile` relay path.
+Generated `m` photo previews remain on the relay because they are not the
+original bridge media. Decisions are logged as
+`crossgram_download_transport=direct|relay`.
+
 ## Patch upstream TDLib
 
 Requires Node.js 22+ (CI uses Node.js 24).
@@ -84,15 +108,17 @@ CROSSGRAM_TDLIB_SOURCE=/path/to/td yarn e2e:source
 ```
 
 The patch is semantic and idempotent. It installs the native implementation and
-tests, updates TDLib's CMake source lists, validates the pre-auth option, and
-connects it to RSA selection, default DC selection, cached config isolation, and
-special-config recovery.
+tests, updates TDLib's CMake source lists and internal MTProto schema, validates
+the pre-auth option, connects it to RSA/DC/config isolation, and integrates
+direct HTTP Range downloads into `FileDownloader`.
 
 ## Native verification
 
-The check workflow patches a fresh upstream checkout, builds `tdjson` and
-TDLib's `run_all_tests`, then runs only the native `CrossgramServerConfig` tests.
-This complements the TypeScript unit tests and real-source patch E2E.
+The check workflow patches a fresh upstream checkout and builds `tdjson` plus
+TDLib's `run_all_tests`. Native Crossgram tests cover server validation, direct
+candidate recognition, URL metadata, and exact range validation. This
+complements the TypeScript tests and real-source patch E2E while the full build
+verifies generated `crossgram.getFileUrl` bindings and downloader integration.
 
 ## License
 

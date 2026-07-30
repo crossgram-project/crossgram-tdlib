@@ -9,8 +9,11 @@ const sourceRoot = process.env.CROSSGRAM_TDLIB_SOURCE;
 const inputs = [
   "CMakeLists.txt",
   "test/CMakeLists.txt",
+  "td/generate/scheme/telegram_api.tl",
   "td/telegram/OptionManager.cpp",
   "td/telegram/ConfigManager.cpp",
+  "td/telegram/files/FileDownloader.cpp",
+  "td/telegram/files/FileDownloader.h",
   "td/telegram/net/PublicRsaKeySharedMain.cpp",
   "td/telegram/net/ConnectionCreator.cpp",
 ];
@@ -36,13 +39,19 @@ describe("current TDLib source patch", () => {
     const first = await patchTdlib(root);
     expect(first.changedFiles).toEqual([
       "CMakeLists.txt",
+      "td/generate/scheme/telegram_api.tl",
       "td/telegram/ConfigManager.cpp",
+      "td/telegram/CrossgramDirectDownload.cpp",
+      "td/telegram/CrossgramDirectDownload.h",
       "td/telegram/CrossgramServerConfig.cpp",
       "td/telegram/CrossgramServerConfig.h",
       "td/telegram/OptionManager.cpp",
+      "td/telegram/files/FileDownloader.cpp",
+      "td/telegram/files/FileDownloader.h",
       "td/telegram/net/ConnectionCreator.cpp",
       "td/telegram/net/PublicRsaKeySharedMain.cpp",
       "test/CMakeLists.txt",
+      "test/crossgram_direct_download.cpp",
       "test/crossgram_server_config.cpp",
     ]);
     expect((await patchTdlib(root)).changedFiles).toEqual([]);
@@ -57,10 +66,16 @@ describe("current TDLib source patch", () => {
       "utf8",
     );
     const configManager = await readFile(path.join(root, "td/telegram/ConfigManager.cpp"), "utf8");
+    const downloader = await readFile(path.join(root, "td/telegram/files/FileDownloader.cpp"), "utf8");
+    const schema = await readFile(path.join(root, "td/generate/scheme/telegram_api.tl"), "utf8");
 
     expect(optionManager).toContain("must be set before TDLib parameters");
     expect(connectionCreator).toContain("Refusing Telegram DC fallback");
     expect(rsa).toContain("Refusing Telegram RSA fallback");
     expect(configManager).toContain("CrossgramServerConfig::allow_special_config()");
+    expect(schema).toContain("crossgram.getFileUrl#7520f6ea");
+    expect(downloader).toContain("start_crossgram_direct_part(part)");
+    expect(downloader).toContain('return fallback("http_range_failed")');
+    expect(downloader).toContain("telegram_api::crossgram_getFileUrl(remote_.as_input_file_location())");
   });
 });
