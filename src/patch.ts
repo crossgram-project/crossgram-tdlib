@@ -197,7 +197,7 @@ export async function patchTdlib(root: string): Promise<PatchResult> {
     source = insertAfterOnce(
       source,
       '#include "td/utils/misc.h"',
-      '\n#include "td/utils/Promise.h"\n#include "td/utils/Time.h"',
+      '\n#include "td/utils/Promise.h"\n#include "td/utils/port/Clocks.h"',
       '#include "td/utils/Promise.h"',
       "td/telegram/files/FileDownloader.cpp",
     );
