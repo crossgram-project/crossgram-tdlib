@@ -55,4 +55,4 @@ jobs:
             --parallel 3
       - name: Run Crossgram native tests
         run: |
-          "$RUNNER_TEMP/td-build/test/run_all_tests" --filter CrossgramServerConfig
+          "$RUNNER_TEMP/td-build/test/run_all_tests" --filter Crossgram
