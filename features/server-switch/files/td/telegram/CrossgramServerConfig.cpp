@@ -30,7 +30,7 @@ Result<IPAddress> parse_address(Slice value, int32 port, Slice field) {
     return Status::Error(400, PSLICE() << field << " must be a non-empty IP address");
   }
   TRY_STATUS(validate_port(port, field));
-  TRY_RESULT(address, IPAddress::get_ip_address(value));
+  TRY_RESULT(address, IPAddress::get_ip_address(value.str()));
   address.set_port(port);
   return address;
 }
@@ -50,8 +50,10 @@ Result<CrossgramServerConfig> CrossgramServerConfig::parse(Slice json) {
   auto &object = value.get_object();
   CrossgramServerConfig result;
   result.enabled_ = true;
-  TRY_RESULT(result.id_, object.get_optional_string_field("id"));
-  TRY_RESULT(result.name_, object.get_required_string_field("name"));
+  TRY_RESULT(id, object.get_optional_string_field("id"));
+  TRY_RESULT(name, object.get_required_string_field("name"));
+  result.id_ = std::move(id);
+  result.name_ = std::move(name);
   result.id_ = trim(std::move(result.id_));
   result.name_ = trim(std::move(result.name_));
   if (result.name_.empty()) {
@@ -61,13 +63,15 @@ Result<CrossgramServerConfig> CrossgramServerConfig::parse(Slice json) {
     result.id_ = result.name_;
   }
 
-  TRY_RESULT(result.enable_special_config_, object.get_optional_bool_field("enable_special_config", true));
+  TRY_RESULT(enable_special_config, object.get_optional_bool_field("enable_special_config", true));
+  result.enable_special_config_ = enable_special_config;
   TRY_RESULT(host, object.get_required_string_field("host"));
   TRY_RESULT(port, object.get_required_int_field("port"));
   host = trim(std::move(host));
   TRY_RESULT(default_address, parse_address(host, port, "host/port"));
 
-  TRY_RESULT(result.rsa_key_, object.get_required_string_field("rsa_key"));
+  TRY_RESULT(rsa_key, object.get_required_string_field("rsa_key"));
+  result.rsa_key_ = std::move(rsa_key);
   result.rsa_key_ = trim(std::move(result.rsa_key_));
   auto rsa = mtproto::RSA::from_pem_public_key(result.rsa_key_);
   if (rsa.is_error()) {
