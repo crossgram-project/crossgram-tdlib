@@ -1,0 +1,23 @@
+{
+  "name": "@crossgram/tdlib-patcher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "yarn@4.9.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit && vitest run --exclude tests/patch.e2e.test.ts",
+    "e2e:source": "vitest run tests/patch.e2e.test.ts",
+    "patch:source": "tsx src/cli.ts patch",
+    "test": "vitest run --exclude tests/patch.e2e.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
