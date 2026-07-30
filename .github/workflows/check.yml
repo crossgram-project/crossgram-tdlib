@@ -15,7 +15,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: yarn
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn check
@@ -34,7 +33,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: yarn
       - run: corepack enable
       - run: yarn install --immutable
       - name: Install TDLib build dependencies
