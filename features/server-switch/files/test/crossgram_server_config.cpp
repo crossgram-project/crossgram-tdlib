@@ -5,7 +5,7 @@
 namespace td {
 namespace {
 
-const char *valid_config = R"json({
+const string valid_config = R"json({
   "name": "Local Crossgram",
   "enable_special_config": false,
   "host": "127.0.0.1",
