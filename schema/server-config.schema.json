@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/crossgram-project/crossgram-tdlib/schema/server-config.schema.json",
+  "title": "Crossgram TDLib server configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "host", "port", "rsa_key"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "enable_special_config": { "type": "boolean", "default": true },
+    "host": { "type": "string", "minLength": 1 },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "rsa_key": {
+      "type": "string",
+      "pattern": "^-----BEGIN RSA PUBLIC KEY-----[\\s\\S]+-----END RSA PUBLIC KEY-----$"
+    },
+    "dcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "ip", "port"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1, "maximum": 1000 },
+          "ip": { "type": "string", "minLength": 1 },
+          "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+        }
+      }
+    }
+  }
+}

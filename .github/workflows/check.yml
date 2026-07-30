@@ -1,0 +1,58 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  patcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn check
+      - name: Clone current TDLib
+        run: git clone --depth 1 https://github.com/tdlib/td.git "$RUNNER_TEMP/td"
+      - name: Verify semantic patch against real source
+        env:
+          CROSSGRAM_TDLIB_SOURCE: ${{ runner.temp }}/td
+        run: yarn e2e:source
+
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - name: Install TDLib build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf libssl-dev zlib1g-dev
+      - name: Clone and patch TDLib
+        run: |
+          git clone --depth 1 https://github.com/tdlib/td.git "$RUNNER_TEMP/td"
+          yarn patch:source --source "$RUNNER_TEMP/td"
+      - name: Configure native build
+        run: |
+          cmake -S "$RUNNER_TEMP/td" -B "$RUNNER_TEMP/td-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTD_ENABLE_JNI=OFF
+      - name: Build native tests and tdjson
+        run: |
+          cmake --build "$RUNNER_TEMP/td-build" \
+            --target run_all_tests tdjson \
+            --parallel 3
+      - name: Run Crossgram native tests
+        run: |
+          "$RUNNER_TEMP/td-build/test/run_all_tests" --filter CrossgramServerConfig
