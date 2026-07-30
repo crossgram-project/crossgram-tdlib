@@ -38,16 +38,23 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - name: Install TDLib build dependencies
-        run: sudo apt-get update && sudo apt-get install -y gperf libssl-dev zlib1g-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf libssl-dev zlib1g-dev
       - name: Clone and patch TDLib
         run: |
           git clone --depth 1 https://github.com/tdlib/td.git "$RUNNER_TEMP/td"
           yarn patch:source --source "$RUNNER_TEMP/td"
       - name: Configure native build
-        run: >-
-          cmake -S "$RUNNER_TEMP/td" -B "$RUNNER_TEMP/td-build" -G Ninja
-          -DCMAKE_BUILD_TYPE=Release -DTD_ENABLE_JNI=OFF
+        run: |
+          cmake -S "$RUNNER_TEMP/td" -B "$RUNNER_TEMP/td-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTD_ENABLE_JNI=OFF
       - name: Build native tests and tdjson
-        run: cmake --build "$RUNNER_TEMP/td-build" --target run_all_tests tdjson --parallel 3
+        run: |
+          cmake --build "$RUNNER_TEMP/td-build" \
+            --target run_all_tests tdjson \
+            --parallel 3
       - name: Run Crossgram native tests
-        run: "$RUNNER_TEMP/td-build/test/run_all_tests" --filter CrossgramServerConfig
+        run: |
+          "$RUNNER_TEMP/td-build/test/run_all_tests" --filter CrossgramServerConfig
