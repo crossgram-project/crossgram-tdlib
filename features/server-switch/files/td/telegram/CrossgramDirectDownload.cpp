@@ -16,16 +16,24 @@ bool CrossgramDirectDownload::is_candidate(Slice file_reference) {
   if (!begins_with(file_reference, prefix)) {
     return false;
   }
-  auto id = file_reference.substr(prefix.size());
-  if (id.empty() || id[0] == '0') {
-    return false;
-  }
-  for (auto c : id) {
-    if (c < '0' || c > '9') {
+  auto suffix = file_reference.substr(prefix.size());
+  auto valid_id = [](Slice id) {
+    if (id.empty() || id[0] == '0') {
       return false;
     }
+    for (auto c : id) {
+      if (c < '0' || c > '9') {
+        return false;
+      }
+    }
+    return true;
+  };
+  auto separator = suffix.find(':');
+  if (separator == Slice::npos) {
+    return valid_id(suffix);
   }
-  return true;
+  return suffix.substr(separator + 1).find(':') == Slice::npos && valid_id(suffix.substr(0, separator)) &&
+         valid_id(suffix.substr(separator + 1));
 }
 
 Result<CrossgramDirectDownload::ResolvedUrl> CrossgramDirectDownload::parse_resolved_url(Slice json, int64 now) {
