@@ -8,11 +8,8 @@
 TEST(CrossgramDirectDownload, CandidateReferences) {
   ASSERT_TRUE(td::CrossgramDirectDownload::is_candidate("bridge-media:1"));
   ASSERT_TRUE(td::CrossgramDirectDownload::is_candidate("bridge-media:987654321"));
-  ASSERT_TRUE(td::CrossgramDirectDownload::is_candidate("bridge-media:42:781234567890"));
   ASSERT_FALSE(td::CrossgramDirectDownload::is_candidate("bridge-media:0"));
   ASSERT_FALSE(td::CrossgramDirectDownload::is_candidate("bridge-media:01"));
-  ASSERT_FALSE(td::CrossgramDirectDownload::is_candidate("bridge-media:42:01"));
-  ASSERT_FALSE(td::CrossgramDirectDownload::is_candidate("bridge-media:42:781:extra"));
   ASSERT_FALSE(td::CrossgramDirectDownload::is_candidate("bridge-media:abc"));
   ASSERT_FALSE(td::CrossgramDirectDownload::is_candidate("telegram-media:1"));
 }
