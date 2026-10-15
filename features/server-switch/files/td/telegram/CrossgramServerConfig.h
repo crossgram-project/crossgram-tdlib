@@ -20,8 +20,7 @@ class CrossgramServerConfig final {
   static Result<CrossgramServerConfig> parse(Slice json);
   static Result<CrossgramServerConfig> current();
 
-  // Presence is checked separately from validity so a damaged custom option
-  // fails closed instead of falling back to Telegram's production network.
+  // 单独检查是否存在自定义配置：若配置存在但解析失败，直接拒绝连接而非回退到官方生产环境
   static bool has_configuration();
   static bool allow_special_config();
 

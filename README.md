@@ -1,30 +1,17 @@
-# Crossgram TDLib patcher
+# Crossgram TDLib Patcher
 
-`crossgram-tdlib` adds instance-scoped Crossgram server selection and direct
-bridge-media downloads to upstream [TDLib](https://github.com/tdlib/td). The
-server option does not change `td_api.tl`, so existing client bindings keep
-working; the native patch extends the internal MTProto schema for direct media.
-It is the shared layer for Unigram, Telegram X, Mithka, and other TDLib clients.
+向 [TDLib](https://github.com/tdlib/td) 源码注入按客户端实例隔离的 Crossgram 自定义服务器配置与 `bridge-media:` 直连下载能力。作为 Unigram、Telegram X、Mithka 等 TDLib 客户端的共用底层补丁。
 
-The patch introduces the standard TDLib option
-`x_crossgram_server_configuration`. Existing bindings already support
-`setOption`, so C#, Java/Kotlin, Dart FFI, and other clients use the same request.
+补丁复用 TDLib 标准 `setOption` 接口，新增选项 `x_crossgram_server_configuration`（不改动公开的 `td_api.tl`，兼容现有 C#、Java/Kotlin、Dart FFI 等语言绑定）。
 
-## Safety properties
+## 安全与隔离特性
 
-- Configuration is per TDLib client/database, not process-global.
-- The option is accepted only before TDLib parameters are initialized.
-- Custom RSA keys and DC addresses are validated natively.
-- A malformed persisted custom configuration fails closed; TDLib does not fall
-  back to Telegram production RSA keys or built-in DCs.
-- Cached DC options from another server are ignored while custom configuration
-  is active.
-- Telegram DNS/Firebase/Azure simple-config recovery is disabled when
-  `enable_special_config` is `false`.
+- **实例级隔离**：配置绑定在单个 TDLib 客户端/数据库实例上，非进程全局状态。
+- **初始化前锁定**：仅允许在 `setTdlibParameters` 初始化前设置，切换服务器需关闭并重建 TDLib 实例。
+- **Fail-Closed 校验**：在 C++ 原生层校验 RSA 公钥与 DC 地址；若持久化的自定义配置损坏，直接拒绝连接，绝不静默回退到 Telegram 官方服务器或官方公钥。
+- **忽略跨服缓存**：启用自定义服务器时，忽略数据库中缓存的其他服务器 DC 列表；`enable_special_config: false` 时禁用 DNS / Firebase / Azure 备用配置拉取。
 
-## Server configuration
-
-The input schema matches Crossgram Android and Desktop:
+## 服务器配置 JSON
 
 ```json
 {
@@ -40,43 +27,34 @@ The input schema matches Crossgram Android and Desktop:
 }
 ```
 
-- `host`, every `dcs[].ip`, and ports are validated before networking starts.
-- Missing DC IDs 1–5 use the top-level `host` and `port`.
-- `enable_special_config` defaults to `true` for compatibility.
-- The TypeScript helper creates a deterministic `id` when it is omitted.
+- 未列出的 DC 1–5 自动使用顶层 `host` 与 `port` 补齐。
+- `enable_special_config` 默认为 `true`。
+- 省略 `id` 时，辅助函数会根据配置内容生成确定性的哈希 ID。
 
-## Client integration contract
+## 客户端接入顺序
 
-When TDLib reports `authorizationStateWaitTdlibParameters`:
+当收到 `authorizationStateWaitTdlibParameters` 时：
 
-1. Parse and normalize the user JSON with `parseServerConfiguration`.
-2. Choose a database directory namespaced by `databaseNamespace(config)`.
-   Never reuse an official Telegram database or a different server's database.
-3. Send `tdlibServerOptionRequest(config)` and wait for `ok`.
-4. Send `setTdlibParameters`.
+1. 使用 `parseServerConfiguration` 校验并规范化 JSON。
+2. 按 `databaseNamespace(config)` 选择独立的数据库目录（严禁与官方服务器或其他自定义服务器共用数据库目录）。
+3. 发送 `setOption("x_crossgram_server_configuration", ...)`：
+   ```json
+   {
+     "@type": "setOption",
+     "name": "x_crossgram_server_configuration",
+     "value": {
+       "@type": "optionValueString",
+       "value": "{...normalized server JSON...}"
+     }
+   }
+   ```
+4. 发送 `setTdlibParameters`。
 
-To return to official Telegram, send an empty option value before parameters and
-use a separate official database directory. Changing servers requires closing
-and recreating the TDLib client.
+切回官方 Telegram 服务器时，在 `setTdlibParameters` 前发送 `optionValueEmpty` 并切回官方数据库目录。
 
-Raw tdjson request example:
+## `bridge-media:` 直连下载
 
-```json
-{
-  "@type": "setOption",
-  "name": "x_crossgram_server_configuration",
-  "value": {
-    "@type": "optionValueString",
-    "value": "{...normalized server JSON...}"
-  }
-}
-```
-
-## Direct bridge-media downloads
-
-When a custom Crossgram server returns a document or photo whose file reference
-is `bridge-media:<positive-id>`, TDLib resolves `crossgram.getFileUrl` on the
-same DC. A valid response contains an unexpired HTTP(S) URL and range support:
+当文件或图片的 `file_reference` 匹配 `bridge-media:<正整数>` 时，`FileDownloader` 会先在对应 DC 调用 `crossgram.getFileUrl`：
 
 ```json
 {
@@ -86,18 +64,11 @@ same DC. A valid response contains an unexpired HTTP(S) URL and range support:
 }
 ```
 
-TDLib requests each file part with `Accept-Encoding: identity` and an exact
-HTTP `Range` header. It accepts only `206 Partial Content` with a matching
-`Content-Range`. RPC failure, malformed or expired metadata, timeout, HTTP
-failure, or invalid range data disables direct mode for that file download and
-retries the same part through the original `upload.getFile` relay path.
-Generated `m` photo previews remain on the relay because they are not the
-original bridge media. Decisions are logged as
-`crossgram_download_transport=direct|relay`.
+随后通过 HTTP `Range`（`Accept-Encoding: identity`）按分片直接下载并严格校验 `206 Partial Content` 与 `Content-Range`。若 RPC、元数据、HTTP 或字节范围校验失败，当前文件自动回退至原生 `upload.getFile` 中转下载，并在日志中记录 `crossgram_download_transport=direct|relay`。
 
-## Patch upstream TDLib
+## 使用与验证
 
-Requires Node.js 22+ (CI uses Node.js 24).
+需要 Node.js 22+：
 
 ```bash
 corepack enable
@@ -107,19 +78,6 @@ yarn check
 CROSSGRAM_TDLIB_SOURCE=/path/to/td yarn e2e:source
 ```
 
-The patch is semantic and idempotent. It installs the native implementation and
-tests, updates TDLib's CMake source lists and internal MTProto schema, validates
-the pre-auth option, connects it to RSA/DC/config isolation, and integrates
-direct HTTP Range downloads into `FileDownloader`.
-
-## Native verification
-
-The check workflow patches a fresh upstream checkout and builds `tdjson` plus
-TDLib's `run_all_tests`. Native Crossgram tests cover server validation, direct
-candidate recognition, URL metadata, and exact range validation. This
-complements the TypeScript tests and real-source patch E2E while the full build
-verifies generated `crossgram.getFileUrl` bindings and downloader integration.
-
 ## License
 
-MIT. Patched upstream TDLib remains under its original Boost Software License.
+补丁工具采用 MIT 协议；打补丁后的 TDLib 源码仍遵循其原有的 Boost Software License。
